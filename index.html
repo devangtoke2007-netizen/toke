@@ -1,0 +1,551 @@
+Save the following code as **`index.html`**. You can open it in a code editor and publish it on GitHub Pages.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live ASL Translator</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #101827;
+  color: white;
+}
+
+header {
+  background: #17243a;
+  padding: 18px;
+  text-align: center;
+  border-bottom: 2px solid #32d6c5;
+}
+
+header h1 {
+  margin: 0;
+  color: #32d6c5;
+}
+
+header p {
+  margin-bottom: 0;
+  color: #cbd5e1;
+}
+
+.container {
+  width: 92%;
+  max-width: 1000px;
+  margin: 25px auto;
+}
+
+.card {
+  background: #1c2940;
+  padding: 20px;
+  border-radius: 15px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  color: #32d6c5;
+  margin-top: 0;
+}
+
+input, button {
+  padding: 12px;
+  margin: 5px 3px;
+  border-radius: 8px;
+  border: none;
+  font-size: 15px;
+}
+
+input[type="text"], input[type="url"] {
+  width: min(100%, 600px);
+  background: white;
+  color: #111;
+}
+
+button {
+  cursor: pointer;
+  background: #32d6c5;
+  color: #102033;
+  font-weight: bold;
+}
+
+button:hover {
+  opacity: 0.85;
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+#camera {
+  width: 100%;
+  max-width: 480px;
+  margin: 15px auto;
+  min-height: 40px;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+  background: #080d16;
+  border-radius: 12px;
+}
+
+#camera canvas, #camera video {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-radius: 12px;
+}
+
+.result {
+  background: #101827;
+  padding: 18px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+#signText {
+  font-size: 30px;
+  font-weight: bold;
+  color: #32d6c5;
+  overflow-wrap: anywhere;
+}
+
+#status {
+  color: #ffd166;
+  overflow-wrap: anywhere;
+}
+
+#gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+  margin-top: 15px;
+}
+
+.sign-card {
+  background: #101827;
+  padding: 8px;
+  border-radius: 8px;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.sign-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  border-radius: 6px;
+  background: white;
+}
+
+.small {
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+#loginScreen {
+  max-width: 500px;
+  margin: 45px auto;
+  padding: 25px;
+  background: #1c2940;
+  border-radius: 15px;
+  text-align: center;
+}
+
+#app {
+  display: none;
+}
+
+footer {
+  padding: 20px;
+  text-align: center;
+  color: #cbd5e1;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>🤟 Live ASL Translator</h1>
+  <p>American Sign Language to Text and Voice</p>
+</header>
+
+<section id="loginScreen">
+  <h2>Welcome!</h2>
+  <p>Start your sign language translation experience.</p>
+  <input id="username" type="text"
+         placeholder="Enter your name" autocomplete="name">
+  <br>
+  <button onclick="enterApp()">Enter Translator</button>
+  <p class="small">This is a demo welcome screen, not secure authentication.</p>
+</section>
+
+<main id="app" class="container">
+
+  <section class="card">
+    <h2>1. Connect your AI sign model</h2>
+    <p>
+      Paste the URL of your trained Teachable Machine image model.
+      The URL should end with a slash.
+    </p>
+
+    <input id="modelURL" type="url"
+           placeholder="https://your-host/model/">
+    <br>
+    <button id="loadModelBtn" onclick="loadModel()">
+      Load AI Model
+    </button>
+
+    <p id="status">Please load your trained model first.</p>
+    <p class="small">
+      The model must be trained with the signs you want to recognize.
+      This website cannot learn new signs simply by uploading reference
+      pictures into the gallery below.
+    </p>
+  </section>
+
+  <section class="card">
+    <h2>2. Live Camera Translator</h2>
+    <p>Allow camera access when your browser asks for permission.</p>
+
+    <button id="startBtn" onclick="startCamera()" disabled>
+      Start Camera
+    </button>
+    <button id="stopBtn" onclick="stopCamera()" disabled>
+      Stop Camera
+    </button>
+    <button onclick="captureSnapshot()">
+      Capture Snapshot
+    </button>
+
+    <div id="camera"></div>
+
+    <div class="result">
+      <p>Detected Sign</p>
+      <div id="signText">Waiting for camera...</div>
+      <p id="confidence">Confidence: --</p>
+      <p id="rawPrediction" class="small"></p>
+    </div>
+
+    <button onclick="speakSign()">🔊 Speak Sign</button>
+    <button onclick="clearResult()">Clear Result</button>
+  </section>
+
+  <section class="card">
+    <h2>3. Upload Your Sign Images</h2>
+    <p>
+      Add reference pictures of your signs. These images are displayed
+      in the gallery but do not automatically train the AI.
+    </p>
+
+    <input id="imageUpload" type="file"
+           accept="image/*" multiple>
+    <div id="gallery"></div>
+  </section>
+
+  <section class="card">
+    <h2>4. Supported Signs</h2>
+    <p>
+      Your model can include ASL letters A–Z and custom classes such
+      as HELLO, GOODBYE, I LOVE YOU, HELP, YES and NO.
+    </p>
+    <p class="small">
+      Only signs represented in your training dataset can be recognized.
+      Static images alone are not sufficient for every moving sign or
+      complete ASL sentence.
+    </p>
+  </section>
+
+</main>
+
+<footer>
+  Live ASL Translator Demo | Camera permission required
+</footer>
+
+<script>
+let model = null;
+let webcam = null;
+let cameraRunning = false;
+let predictionLoopRunning = false;
+let lastSign = "";
+let stableSign = "";
+let stableCount = 0;
+let lastSpokenSign = "";
+let lastSpokenTime = 0;
+
+const cameraDiv = document.getElementById("camera");
+const statusText = document.getElementById("status");
+const signText = document.getElementById("signText");
+const confidenceText = document.getElementById("confidence");
+const rawPrediction = document.getElementById("rawPrediction");
+const startBtn = document.getElementById("startBtn");
+const stopBtn = document.getElementById("stopBtn");
+
+function enterApp() {
+  const name = document.getElementById("username").value.trim();
+
+  if (!name) {
+    alert("Please enter your name.");
+    return;
+  }
+
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("app").style.display = "block";
+}
+
+function setStatus(message) {
+  statusText.textContent = message;
+}
+
+async function loadModel() {
+  const input = document.getElementById("modelURL").value.trim();
+  const url = input.endsWith("/") ? input : input + "/";
+
+  if (!input) {
+    alert("Please enter your trained model URL.");
+    return;
+  }
+
+  try {
+    setStatus("Loading AI model...");
+    document.getElementById("loadModelBtn").disabled = true;
+
+    model = await tmImage.load(
+      url + "model.json",
+      url + "metadata.json"
+    );
+
+    setStatus("AI model loaded successfully.");
+    startBtn.disabled = false;
+  } catch (error) {
+    console.error(error);
+    model = null;
+    setStatus(
+      "Could not load the model. Check the URL, model files, " +
+      "internet connection and hosting permissions."
+    );
+    alert("Model loading failed. Check the model URL and try again.");
+  } finally {
+    document.getElementById("loadModelBtn").disabled = false;
+  }
+}
+
+async function startCamera() {
+  if (!model) {
+    alert("Load your trained AI model first.");
+    return;
+  }
+
+  if (cameraRunning) return;
+
+  try {
+    setStatus("Requesting camera permission...");
+
+    webcam = new tmImage.Webcam(400, 400, true);
+    await webcam.setup();
+    await webcam.play();
+
+    cameraDiv.replaceChildren(webcam.canvas);
+    cameraRunning = true;
+    predictionLoopRunning = true;
+
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+
+    setStatus("Camera running. Show a trained sign.");
+    requestAnimationFrame(predictLoop);
+  } catch (error) {
+    console.error(error);
+    setStatus(
+      "Camera could not start. Allow camera permission and use HTTPS " +
+      "or localhost."
+    );
+    alert("Unable to access the camera. Check browser permissions.");
+  }
+}
+
+async function predictLoop() {
+  if (!cameraRunning || !webcam || !model) {
+    predictionLoopRunning = false;
+    return;
+  }
+
+  try {
+    webcam.update();
+
+    const predictions = await model.predict(webcam.canvas);
+
+    predictions.sort((a, b) => b.probability - a.probability);
+
+    const best = predictions[0];
+    const percent = (best.probability * 100).toFixed(1);
+
+    rawPrediction.textContent = predictions
+      .slice(0, 3)
+      .map(p => p.className + ": " +
+        (p.probability * 100).toFixed(1) + "%")
+      .join(" | ");
+
+    // Change 0.80 to a higher value for stricter confidence filtering.
+    if (best.probability >= 0.80) {
+      if (stableSign === best.className) {
+        stableCount++;
+      } else {
+        stableSign = best.className;
+        stableCount = 1;
+      }
+
+      // Require the same predicted class across multiple frames.
+      if (stableCount >= 4) {
+        lastSign = best.className;
+        signText.textContent = best.className;
+        confidenceText.textContent = "Confidence: " + percent + "%";
+      }
+    } else {
+      stableSign = "";
+      stableCount = 0;
+      signText.textContent = "Sign not recognized confidently";
+      confidenceText.textContent = "Confidence: " + percent + "%";
+    }
+  } catch (error) {
+    console.error("Prediction error:", error);
+    setStatus("Prediction error. Check your model and camera.");
+  }
+
+  if (cameraRunning) {
+    requestAnimationFrame(predictLoop);
+  } else {
+    predictionLoopRunning = false;
+  }
+}
+
+function stopCamera() {
+  cameraRunning = false;
+
+  if (webcam) {
+    try {
+      webcam.stop();
+    } catch (error) {
+      console.warn(error);
+    }
+  }
+
+  webcam = null;
+  cameraDiv.replaceChildren();
+
+  startBtn.disabled = !model;
+  stopBtn.disabled = true;
+
+  setStatus("Camera stopped.");
+}
+
+function speakSign() {
+  const text = signText.textContent.trim();
+
+  if (!text || text === "Waiting for camera..." ||
+      text === "Sign not recognized confidently") {
+    alert("No recognized sign is available to speak.");
+    return;
+  }
+
+  if (!("speechSynthesis" in window)) {
+    alert("Speech output is not supported in this browser.");
+    return;
+  }
+
+  window.speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "en-US";
+  utterance.rate = 0.9;
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function clearResult() {
+  lastSign = "";
+  stableSign = "";
+  stableCount = 0;
+  signText.textContent = "Waiting for a sign...";
+  confidenceText.textContent = "Confidence: --";
+  rawPrediction.textContent = "";
+}
+
+function captureSnapshot() {
+  if (!webcam || !cameraRunning) {
+    alert("Start the camera before capturing a snapshot.");
+    return;
+  }
+
+  const canvas = webcam.canvas;
+  const link = document.createElement("a");
+  link.download = "asl-snapshot-" + Date.now() + ".png";
+  link.href = canvas.toDataURL("image/png");
+  link.click();
+}
+
+document.getElementById("imageUpload").addEventListener(
+  "change",
+  function(event) {
+    const files = Array.from(event.target.files || []);
+
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+        const card = document.createElement("div");
+        card.className = "sign-card";
+
+        const img = document.createElement("img");
+        img.src = e.target.result;
+        img.alt = file.name;
+
+        const caption = document.createElement("p");
+        caption.textContent = file.name;
+
+        card.appendChild(img);
+        card.appendChild(caption);
+
+        document.getElementById("gallery").appendChild(card);
+      };
+
+      reader.readAsDataURL(file);
+    }
+
+    // Permit selecting the same file again.
+    event.target.value = "";
+  }
+);
+
+window.addEventListener("beforeunload", function() {
+  if (webcam) {
+    try {
+      webcam.stop();
+    } catch (error) {
+      // Camera may already be stopped.
+    }
+  }
+
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+});
+</script>
+
+</body>
+</html>
+```
